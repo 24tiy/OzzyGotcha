@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OzziGochi 🦇 – Tamagotchi‑style Ozzy Osbourne sim</title>
+  <style>
+    :root{
+      --bg:#0b0f0c;           /* device body */
+      --screen:#143c1f;       /* LCD green */
+      --screen-glow:#1e5a2f;
+      --bezel:#0f1411;
+      --accent:#e6f5e6;
+      --good:#a7f3d0;         /* mint */
+      --warn:#fde68a;         /* amber */
+      --bad:#fca5a5;          /* red */
+      --metal:#c7d2fe;        /* indigo-100 */
+      --ink:#e5ffe5;          /* pixel ink on LCD */
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;background:
+      radial-gradient(1200px 600px at 10% -10%, #1b3623 0, transparent 60%),
+      radial-gradient(1200px 700px at 110% 110%, #1b3623 0, transparent 60%),
+      var(--bg);
+      color:#eaf7ea;font-family: ui-monospace, Menlo, Monaco, "Cascadia Mono", "Segoe UI Mono", Consolas, "Liberation Mono", monospace;
+    }
+    .wrap{max-width:980px;margin:24px auto;padding:16px}
+
+    /* Device shell */
+    .device{display:grid;grid-template-columns:1fr;gap:14px;padding:18px;border-radius:24px;background:
+      radial-gradient(180px 40px at 10% -20%, #1a201b 0, transparent 70%),
+      radial-gradient(220px 60px at 90% 120%, #1a201b 0, transparent 70%),
+      linear-gradient(180deg, #101613, #0b100e);
+      box-shadow: 0 20px 40px rgba(0,0,0,.5), inset 0 0 0 2px #0f1613, inset 0 0 30px #030705;
+    }
+    .topbar{display:flex;gap:12px;align-items:center;justify-content:space-between}
+    .title{letter-spacing:.5px;font-weight:700}
+    .title .bat{filter: drop-shadow(0 0 6px rgba(167,243,208,.3));}
+
+    /* Screen */
+    .screen{position:relative;border-radius:18px;padding:14px;background:
+      radial-gradient(400px 120px at 50% -20%, var(--screen-glow) 0, transparent 60%),
+      linear-gradient(180deg, #0f2c18, var(--screen));
+      box-shadow: inset 0 0 0 3px #0c2013, inset 0 0 60px rgba(0,0,0,.6);
+    }
+    .lcd{position:relative;border-radius:10px;background:
+      radial-gradient(2px 2px at 1px 1px, rgba(255,255,255,.05) 25%, rgba(0,0,0,.05) 26%) 0 0/4px 4px,
+      linear-gradient(180deg, #1c3e24, #17351f);
+      outline: 2px solid #0a1a10; outline-offset: -2px;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.04), inset 0 0 30px rgba(0,0,0,.35);
+      height: 340px; display:grid; grid-template-columns: 1fr 220px; gap:12px; padding:10px;
+    }
+    canvas{ image-rendering: pixelated; image-rendering: crisp-edges; background: #122e1b; border-radius:8px;}
+
+    .stats{display:grid;gap:6px;align-content:start}
+    .bar{height:14px;background:#0d2616;border-radius:10px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.05)}
+    .bar > span{display:block;height:100%;border-radius:10px;transition:width .25s ease}
+    .bar .label{position:absolute;margin-top:-20px;font-size:12px;opacity:.8}
+
+    .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}
+    button{background:#0d1612;color:#eaf7ea;border:1px solid #1b2a23;border-radius:12px;padding:10px 12px;cursor:pointer;
+      box-shadow: inset 0 -2px 0 rgba(255,255,255,.03), 0 6px 12px rgba(0,0,0,.25);
+      transition: transform .05s ease, box-shadow .2s ease, background .2s ease;
+      font-weight:600
+    }
+    button:hover{background:#122019}
+    button:active{transform: translateY(1px)}
+
+    .pill{padding:6px 10px;border-radius:999px;background:#0e1a14;border:1px solid #1d2a23;font-size:12px}
+    .row{display:flex;gap:8px;flex-wrap:wrap}
+
+    .log{margin-top:12px;background:#0d1612;border:1px solid #1b2a23;border-radius:12px;padding:10px;min-height:62px;max-height:120px;overflow:auto}
+    .toast{position:fixed;right:16px;bottom:16px;background:#0e1a14;border:1px solid #1e2e27;border-radius:12px;padding:10px 12px;box-shadow:0 10px 20px rgba(0,0,0,.35);display:none}
+
+    .footer{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px}
+    .mini{font-size:12px;opacity:.7}
+
+    .badge{display:inline-flex;align-items:center;gap:6px;background:#0e1a14;border:1px dashed #2c3f35;border-radius:10px;padding:6px 8px;margin:2px}
+    .badge.good{border-color:#2b5b3f}
+
+    .warning{color:var(--warn)}
+    .danger{color:var(--bad)}
+    .good{color:var(--good)}
+    .metal{color:var(--metal)}
+
+    /* Overlays inside canvas area */
+    .overlay{position:absolute;left:10px;top:10px;right:232px;bottom:10px;pointer-events:none}
+
+    .camera{position:absolute;right:20px;top:20px;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.08);padding:6px 10px;border-radius:8px;font-size:12px}
+
+    .switch{display:inline-flex;align-items:center;gap:8px}
+    .switch input{appearance:none;width:36px;height:22px;background:#0f1b15;border:1px solid #1b2a23;border-radius:999px;position:relative;outline:none;cursor:pointer}
+    .switch input:after{content:"";position:absolute;width:16px;height:16px;border-radius:50%;left:3px;top:2px;background:#d1fae5;transition:transform .2s ease}
+    .switch input:checked:after{transform:translateX(14px)}
+
+    details summary{cursor:pointer;opacity:.9}
+    details[open] summary{opacity:1}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="device">
+      <div class="topbar">
+        <div class="title">🦇 <span class="bat">OzziGochi</span> — Tamagotchi‑style Ozzy sim</div>
+        <div class="row">
+          <label class="switch" title="Mute/Unmute">
+            <input id="muteToggle" type="checkbox" />
+            <span class="mini">Mute</span>
+          </label>
+          <label class="switch" title="Use speech if audio files are missing">
+            <input id="speechToggle" type="checkbox" checked />
+            <span class="mini">Speech fallback</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="screen">
+        <div class="lcd">
+          <div style="position:relative">
+            <canvas id="game" width="192" height="144"></canvas>
+            <div class="overlay">
+              <div id="cameraOverlay" class="camera" style="display:none">📺 MTV Reality</div>
+            </div>
+          </div>
+          <div class="stats">
+            <div class="row">
+              <span class="pill">Day: <b id="day">1</b></span>
+              <span class="pill">Time: <b id="clock">00:00</b></span>
+              <span class="pill">Metal: <b id="metalLabel">0</b></span>
+              <span class="pill">Mess: <b id="messLabel">0</b></span>
+            </div>
+            <div class="bar" title="Health">
+              <span id="bar-health" style="width:80%;background:linear-gradient(90deg,#1f8d4f,#43c27c)"></span>
+            </div>
+            <div class="bar" title="Energy">
+              <span id="bar-energy" style="width:80%;background:linear-gradient(90deg,#1a7b46,#2ea163)"></span>
+            </div>
+            <div class="bar" title="Mood">
+              <span id="bar-mood" style="width:80%;background:linear-gradient(90deg,#296a7f,#42a3c6)"></span>
+            </div>
+            <div class="bar" title="Fullness (Hunger)">
+              <span id="bar-full" style="width:80%;background:linear-gradient(90deg,#7a8d2a,#a6ce3a)"></span>
+            </div>
+            <div class="bar" title="Intoxication">
+              <span id="bar-intox" style="width:0%;background:linear-gradient(90deg,#a03838,#d56b6b)"></span>
+            </div>
+            <div class="bar" title="Caffeine">
+              <span id="bar-caf" style="width:0%;background:linear-gradient(90deg,#8b6f2a,#c8ad58)"></span>
+            </div>
+
+            <div class="grid">
+              <button id="btn-feed" title="Feed Ozzy">🍽️ Feed</button>
+              <button id="btn-drink" title="Give drinks">🥤 Drinks</button>
+              <button id="btn-sleep" title="Let Ozzy sleep">😴 Sleep</button>
+              <button id="btn-stage" title="Send to stage">🎤 Stage</button>
+              <button id="btn-clean" title="Clean mess">🧹 Clean</button>
+              <button id="btn-sharon" title="Call Sharon (panic)">🧑‍🦰 Sharon!</button>
+              <button id="btn-ach" title="Show achievements">🏆 Achievements</button>
+              <button id="btn-save" title="Save now">💾 Save</button>
+              <button id="btn-reset" title="Reset game">♻️ Reset</button>
+            </div>
+
+            <details>
+              <summary>Quick actions</summary>
+              <div class="row" style="margin-top:6px">
+                <button class="miniBtn" data-feed="pizza">🍕 Pizza</button>
+                <button class="miniBtn" data-feed="burger">🍔 Burger</button>
+                <button class="miniBtn" data-feed="meat">🍗 Meat</button>
+                <button class="miniBtn" data-feed="dove">🕊️ White Dove</button>
+                <button class="miniBtn" data-feed="bat">🦇 Bat</button>
+                <button class="miniBtn" data-drink="tea">🍵 Tea</button>
+                <button class="miniBtn" data-drink="coffee">☕ Coffee (XL)</button>
+                <button class="miniBtn" data-drink="alcohol">🍺 Alcohol</button>
+              </div>
+            </details>
+
+            <div class="log" id="log"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="footer">
+        <div class="mini">Tip: Survive days, keep Health/Fullness up, avoid high Intoxication. Sharon can rescue Ozzy, but has cooldown.</div>
+        <div class="row mini">
+          <span class="badge good">Made with ♥ for parody / fan fun</span>
+          <span class="badge">Data saved locally</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Audio placeholders. Replace src with real files in ./sounds/ -->
+  <audio id="s-sharon" src="sounds/sharon.mp3" data-fallback-text="Sharon!" preload="auto"></audio>
+  <audio id="s-allaboard" src="sounds/allaboard.mp3" data-fallback-text="All aboard!" preload="auto"></audio>
+  <audio id="s-yeah" src="sounds/yeah.mp3" data-fallback-text="Yeah!" preload="auto"></audio>
+  <audio id="s-mumble" src="sounds/mumble.mp3" data-fallback-text="*incoherent mumble*" preload="auto"></audio>
+  <audio id="s-eat" src="sounds/eat.mp3" data-fallback-text="Nom" preload="auto"></audio>
+  <audio id="s-drink" src="sounds/drink.mp3" data-fallback-text="Gulp" preload="auto"></audio>
+  <audio id="s-sleep" src="sounds/sleep.mp3" data-fallback-text="Zzz" preload="auto"></audio>
+  <audio id="s-stage" src="sounds/stage.mp3" data-fallback-text="All aboard!" preload="auto"></audio>
+  <audio id="s-fall" src="sounds/fall.mp3" data-fallback-text="Ouch" preload="auto"></audio>
+  <audio id="s-bat" src="sounds/bat.mp3" data-fallback-text="Bat" preload="auto"></audio>
+  <audio id="s-dove" src="sounds/dove.mp3" data-fallback-text="Dove" preload="auto"></audio>
+  <audio id="s-break" src="sounds/break.mp3" data-fallback-text="Crash" preload="auto"></audio>
+  <audio id="s-poop" src="sounds/poop.mp3" data-fallback-text="*squeak*" preload="auto"></audio>
+
+  <script>
+  // --- OzziGochi — single-file web app ---
+  // All UI text is in English; feel free to localize later.
+  //
+  // STATE MODEL
+  const dayLengthSec = 60; // 1 min == 1 game day (tweakable)
+  const TICK_MS = 1000/12; // 12 FPS for Tamagotchi feel
+  const SAVE_KEY = 'ozzigochi_v1';
+
+  const game = {
+    t: 0,
+    day: 1,
+    clockSec: 0,
+    stats: {
+      health: 85,
+      energy: 80,
+      mood: 75,
+      fullness: 80,
+      intox: 0,
+      caffeine: 0,
+      metal: 10
+    },
+    temp: {
+      action: 'idle', // idle|eat|drink|sleep|stage|fall|wasted
+      actionTime: 0,
+      cam: false,
+      camTime: 0,
+      mess: 0,
+      broken: 0,
+      batCount: 0,
+      doveDone: false,
+      coffeeStreak: 0,
+      alcoholStreak: 0,
+      lastCoffeeAt: -999,
+      lastAlcoholAt: -999,
+      sharonCooldown: 0,
+      stageTime: 0,
+      sleepwalk: false
+    },
+    ach: {}, // achievement flags
+    rngSeed: Math.floor(Math.random()*1e9)
+  };
+
+  // PRNG for deterministic fun across a session
+  function rand(){
+    // xorshift32
+    let x = game.rngSeed |= 0;
+    x ^= x << 13; x ^= x >>> 17; x ^= x << 5;
+    game.rngSeed = x;
+    return ((x >>> 0) / 4294967296);
+  }
+
+  function clamp(n,min,max){ return Math.max(min, Math.min(max, n)); }
+
+  // --- Persistence ---
+  function save(){ localStorage.setItem(SAVE_KEY, JSON.stringify(game)); log('💾 Saved'); }
+  function load(){
+    const s = localStorage.getItem(SAVE_KEY);
+    if(!s) return;
+    try{ const data = JSON.parse(s);
+      Object.assign(game, data);
+      // defensive: ensure keys exist
+      game.temp = Object.assign({action:'idle',actionTime:0,cam:false,camTime:0,mess:0,broken:0,batCount:0,doveDone:false,coffeeStreak:0,alcoholStreak:0,lastCoffeeAt:-999,lastAlcoholAt:-999,sharonCooldown:0,stageTime:0,sleepwalk:false}, game.temp||{});
+      game.ach = Object.assign({}, game.ach||{});
+      log('✅ Loaded save');
+    }catch(e){ console.warn(e); }
+  }
+
+  // --- UI ---
+  const cvs = document.getElementById('game');
+  const ctx = cvs.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+
+  const bar = id=>document.getElementById(id);
+  const lblDay = document.getElementById('day');
+  const lblClock = document.getElementById('clock');
+  const lblMetal = document.getElementById('metalLabel');
+  const lblMess = document.getElementById('messLabel');
+  const logEl = document.getElementById('log');
+  const cameraOverlay = document.getElementById('cameraOverlay');
+  const muteToggle = document.getElementById('muteToggle');
+  const speechToggle = document.getElementById('speechToggle');
+
+  function log(t){
+    const p = document.createElement('div');
+    p.textContent = `[${new Date().toLocaleTimeString()}] ${t}`;
+    logEl.prepend(p);
+    while(logEl.childNodes.length>60) logEl.removeChild(logEl.lastChild);
+  }
+
+  // --- Audio ---
+  function play(id){
+    if(muteToggle.checked) return;
+    const el = document.getElementById(id);
+    if(!el) return;
+    el.currentTime = 0;
+    el.play().catch(()=>{
+      if(!speechToggle.checked) return;
+      const txt = el.getAttribute('data-fallback-text')||'';
+      if(txt) speak(txt);
+    });
+  }
+  function speak(text){
+    if(!('speechSynthesis' in window)) return;
+    const u = new SpeechSynthesisUtterance(text);
+    u.rate = 1; u.pitch = 1; u.lang = 'en-US';
+    window.speechSynthesis.speak(u);
+  }
+
+  // --- Actions ---
+  function feed(kind){
+    const s = game.stats; const t = game.temp;
+    let msg = '';
+    switch(kind){
+      case 'pizza': s.fullness+=18; s.mood+=6; msg='🍕 Pizza time.'; break;
+      case 'burger': s.fullness+=20; s.mood+=4; msg='🍔 Burger down.'; break;
+      case 'meat': s.fullness+=16; s.health+=4; msg='🍗 Meat feast.'; break;
+      case 'dove': s.fullness+=6; s.mood+=8; s.health-=8; t.doveDone = true; unlock('CBS Meeting'); play('s-dove'); msg='🕊️ Oh no… the Dove…'; break;
+      case 'bat': s.fullness+=4; s.health-=10; s.metal+=8; t.batCount++; play('s-bat'); msg='🦇 Bat snack. Metal++'; if(t.batCount>=10) unlock('Prince of Darkness'); break;
+    }
+    s.fullness = clamp(s.fullness,0,100);
+    s.mood = clamp(s.mood,0,100);
+    s.health = clamp(s.health,0,100);
+    s.metal = clamp(s.metal,0,999);
+    t.action = 'eat'; t.actionTime = 24; // ~2s
+    play('s-eat');
+    log(msg);
+  }
+
+  function drink(kind){
+    const s = game.stats; const t = game.temp;
+    let msg='';
+    switch(kind){
+      case 'tea': s.health+=6; s.mood+=3; s.intox = Math.max(0, s.intox-4); msg='🍵 Tea time. Calm restored.'; break;
+      case 'coffee': s.energy+=14; s.caffeine+=18; t.coffeeStreak++; t.lastCoffeeAt = game.clockSec; msg='☕ XL Coffee. Buzz!'; if(t.coffeeStreak>=3 && (game.clockSec - t.lastCoffeeAt) <= 120) unlock('Coffee Overdose'); break;
+      case 'alcohol': s.mood+=12; s.intox+=22; s.energy-=6; t.alcoholStreak++; t.lastAlcoholAt = game.clockSec; msg='🍺 Alcohol… risky fun.'; if(t.alcoholStreak>=5) unlock('Drunk Again'); break;
+    }
+    s.energy = clamp(s.energy,0,100);
+    s.mood = clamp(s.mood,0,100);
+    s.health = clamp(s.health,0,100);
+    s.intox = clamp(s.intox,0,100);
+    s.caffeine = clamp(s.caffeine,0,100);
+    t.action = 'drink'; t.actionTime = 20; play('s-drink');
+    log(msg);
+  }
+
+  function sleep(){
+    const s = game.stats; const t = game.temp;
+    t.action = 'sleep'; t.actionTime = 72; // ~6s nap
+    s.energy+=26; s.health+=8; s.mood+=4; s.caffeine=Math.max(0,s.caffeine-10); s.intox=Math.max(0,s.intox-8);
+    play('s-sleep');
+    log('😴 Nap time.');
+  }
+
+  function stage(){
+    const s = game.stats; const t = game.temp;
+    t.action = 'stage'; t.stageTime = 60; t.actionTime = 60; // ~5s
+    play('s-stage');
+    if(s.energy>80){ unlock('All Aboard!'); play('s-allaboard'); }
+    // outcomes affected by intox & energy
+    if(s.intox>65 || s.energy<25){ // fall
+      setTimeout(()=>{ t.action='fall'; t.actionTime=24; s.health-=10; s.mood-=8; play('s-fall'); log('🤕 Ozzy fell on stage!'); }, 1200);
+    }else{
+      s.mood+=10; s.metal+=5; log('🎤 Show time! Crowd goes wild.');
+    }
+    s.energy = clamp(s.energy-14,0,100);
+    s.mood = clamp(s.mood,0,100);
+    s.metal = clamp(s.metal,0,999);
+  }
+
+  function clean(){
+    if(game.temp.mess<=0){ log('Everything looks tidy.'); return; }
+    game.temp.mess = Math.max(0, game.temp.mess-1);
+    play('s-poop');
+    log('🧹 You cleaned a mess.');
+    // track achievement
+    const cleaned = (game.ach._cleaned||0)+1; game.ach._cleaned = cleaned;
+    if(cleaned>=5) unlock('Dog Whisperer');
+  }
+
+  function sharon(){
+    const t = game.temp; const s = game.stats;
+    if(t.sharonCooldown>0){ log(`Sharon is busy (${Math.ceil(t.sharonCooldown)}s).`); return; }
+    play('s-sharon');
+    log('🧑‍🦰 SHARON!!! comes to the rescue.');
+    s.intox = Math.max(0, s.intox-70);
+    s.health = clamp(s.health+20,0,100);
+    s.energy = clamp(s.energy+18,0,100);
+    s.mood = clamp(s.mood+8,0,100);
+    t.action = 'idle';
+    t.sharonCooldown = 120; // 2 minutes
+  }
+
+  // --- Achievements ---
+  const ACH = [
+    { name:'Prince of Darkness', desc:'Feed 10 bats.', icon:'🦇' },
+    { name:'CBS Meeting', desc:'Give a white dove once.', icon:'🕊️' },
+    { name:'All Aboard!', desc:'Go on stage with Energy > 80.', icon:'🚂' },
+    { name:'Drunk Again', desc:'Serve alcohol 5 times in a row.', icon:'🍺' },
+    { name:'Coffee Overdose', desc:'Give coffee 3 times quickly.', icon:'☕' },
+    { name:'MTV Superstar', desc:'Trigger the Reality Show event.', icon:'📺' },
+    { name:'Dog Whisperer', desc:'Clean 5 messes.', icon:'🐶' },
+    { name:'Destroyer', desc:'Break 3 things.', icon:'🪓' },
+    { name:'Never Die', desc:'Survive 30 in‑game days.', icon:'💀' },
+    { name:'King of Metal', desc:'Reach Metal ≥ 100.', icon:'👑' },
+  ];
+
+  function unlock(name){
+    if(game.ach[name]) return;
+    game.ach[name] = true;
+    toast(`🏆 Achievement: ${name}`);
+    if(name==='King of Metal') play('s-yeah');
+    if(name==='MTV Superstar') play('s-mumble');
+  }
+
+  function showAchievements(){
+    const owned = ACH.map(a=>({a,own:!!game.ach[a.name]}));
+    const html = owned.map(({a,own})=>`<div class="badge ${own?'good':''}">${a.icon} <b>${a.name}</b> — ${a.desc} ${own?'<span class="good">(unlocked)</span>':''}</div>`).join('');
+    logEl.innerHTML = html + logEl.innerHTML;
+  }
+
+  // --- Random events ---
+  function randomEvents(){
+    const s = game.stats, t = game.temp;
+    // Small chance every 8s
+    if(game.t % (8*12) === 0){
+      if(rand()<0.25){
+        const roll = rand();
+        if(roll<0.25){ // MTV Reality
+          t.cam = true; t.camTime = 8*12; unlock('MTV Superstar'); play('s-mumble'); log('📺 MTV camera is rolling…');
+        }else if(roll<0.45){ // Pet mess
+          t.mess++; log('🐶 A pet left a mess. Clean it!');
+        }else if(roll<0.65){ // Break stuff
+          t.broken++; play('s-break'); log('🎸 Ozzy smashed some gear!'); if(t.broken>=3) unlock('Destroyer');
+        }else if(roll<0.8){ // Sleepwalk if tired
+          if(s.energy<25){ t.sleepwalk=true; log('🚶‍♂️ Ozzy is sleepwalking…'); }
+        }else{ // TV argument
+          s.mood+=4; log('📺 Ozzy argued with the TV and won.');
+        }
+      }
+    }
+  }
+
+  // --- Core tick ---
+  function tick(){
+    game.t++;
+    game.clockSec++;
+    if(game.clockSec % dayLengthSec === 0){ game.day++; game.clockSec = 0; }
+
+    const s = game.stats; const t = game.temp;
+    // Natural decay/regeneration
+    s.fullness -= 0.04; // hunger
+    s.energy -= 0.03 + (s.caffeine>40?0.01:0) + (s.intox>50?0.02:0);
+    s.mood -= 0.01 + (t.mess>0?0.01:0);
+    s.metal = Math.max(0, s.metal - 0.005);
+
+    // Effects
+    if(s.caffeine>0){ s.caffeine -= 0.12; if(rand()<0.03) jitter(); }
+    if(s.intox>0){ s.intox -= 0.08; }
+
+    // Penalties
+    if(s.fullness<15) s.health -= 0.08;
+    if(s.energy<10) s.health -= 0.06;
+    if(s.intox>70) s.health -= 0.12;
+
+    // Sharon auto-rescue when wasted
+    if(s.intox>85 && rand()<0.02){ sharon(); }
+
+    // Sleepwalking harmless drift
+    if(t.sleepwalk){ if(rand()<0.03) t.sleepwalk=false; }
+
+    // Cam overlay timeout
+    if(t.cam){ t.camTime--; if(t.camTime<=0) t.cam=false; }
+
+    // Sharon cooldown
+    if(t.sharonCooldown>0) t.sharonCooldown -= 1/12;
+
+    // Clamp
+    for(const k of ['health','energy','mood','fullness','intox','caffeine']) s[k]=clamp(s[k],0,100);
+
+    // Death check (soft fail)
+    if(s.health<=0){ s.health=10; s.mood=10; s.energy=20; s.fullness=20; s.intox=0; log('💀 Ozzy almost died. Sharon revived him.'); sharon(); }
+
+    // Ach checks
+    if(game.day>=30) unlock('Never Die');
+    if(s.metal>=100) unlock('King of Metal');
+
+    // Action timer
+    if(t.actionTime>0) t.actionTime--; else t.action='idle';
+
+    randomEvents();
+    render();
+    if(game.t % (5*12) === 0) save();
+  }
+
+  // Simple jitter visual (camera shake)
+  let jitterPhase = 0;
+  function jitter(){ jitterPhase = 4; }
+
+  // --- Render ---
+  function render(){
+    const s = game.stats; const t = game.temp;
+    const w = cvs.width, h = cvs.height;
+    ctx.save();
+    ctx.clearRect(0,0,w,h);
+
+    // optional camera jitter
+    if(jitterPhase>0){ ctx.translate((rand()-.5)*2, (rand()-.5)*2); jitterPhase--; }
+
+    // background grid dots
+    ctx.fillStyle = '#164222';
+    ctx.fillRect(0,0,w,h);
+    ctx.fillStyle = '#1a4f2a';
+    for(let y=0;y<h;y+=8){ for(let x=0;x<w;x+=8){ ctx.fillRect(x+1,y+1,1,1);} }
+
+    // Stage / room props
+    drawRoom();
+
+    // Ozzy sprite
+    const mood = s.mood, energy = s.energy, intox = s.intox;
+    let pose = 'idle';
+    if(t.action==='sleep') pose='sleep';
+    else if(t.action==='eat') pose='eat';
+    else if(t.action==='drink') pose='drink';
+    else if(t.action==='stage') pose='stage';
+    else if(t.action==='fall') pose='fall';
+    else if(intox>85) pose='wasted';
+    else if(energy<12) pose='tired';
+
+    drawOzzy(pose, { batAura: (game.temp.batCount>=3 && s.health<60) });
+
+    // Mess icons
+    for(let i=0;i<game.temp.mess;i++){
+      drawMess(12+i*12, h-18);
+    }
+
+    ctx.restore();
+
+    // UI labels
+    lblDay.textContent = game.day;
+    const mm = String(Math.floor((game.clockSec%dayLengthSec)/60)).padStart(2,'0');
+    const ss = String(game.clockSec%60).padStart(2,'0');
+    lblClock.textContent = `${mm}:${ss}`;
+    lblMetal.textContent = Math.floor(s.metal);
+    lblMess.textContent = game.temp.mess;
+
+    bar('bar-health').style.width = `${s.health}%`;
+    bar('bar-energy').style.width = `${s.energy}%`;
+    bar('bar-mood').style.width = `${s.mood}%`;
+    bar('bar-full').style.width = `${s.fullness}%`;
+    bar('bar-intox').style.width = `${s.intox}%`;
+    bar('bar-caf').style.width = `${s.caffeine}%`;
+
+    cameraOverlay.style.display = game.temp.cam? 'block':'none';
+  }
+
+  function drawRoom(){
+    const w=cvs.width,h=cvs.height;
+    // floor
+    ctx.fillStyle='#10351f'; ctx.fillRect(0,h-24,w,24);
+    // amp
+    ctx.fillStyle='#0e2a18'; ctx.fillRect(w-46,h-42,36,28);
+    ctx.fillStyle='#0c2314'; ctx.fillRect(w-44,h-40,32,20);
+    ctx.fillStyle='#0a1d11'; ctx.fillRect(w-40,h-36,24,12);
+    // TV if camera
+    if(game.temp.cam){
+      ctx.fillStyle='#0a2314'; ctx.fillRect(6,6,28,20);
+      ctx.fillStyle='#183b23'; ctx.fillRect(8,8,24,14);
+    }
+  }
+
+  function drawMess(x,y){
+    ctx.fillStyle='#0b2013'; ctx.fillRect(x,y,6,4);
+    ctx.fillStyle='#0d2716'; ctx.fillRect(x+1,y-1,4,4);
+  }
+
+  // Pixel Ozzy (inline vector-y pixels)
+  function drawOzzy(pose, opts={}){
+    const w=cvs.width,h=cvs.height;
+    const baseX = 66, baseY = h-48; // feet position baseline
+    let bob = Math.sin(game.t/6)*1;
+    let x=baseX, y=baseY-bob;
+
+    // if fallen/wasted, lie down
+    if(pose==='fall' || pose==='wasted'){
+      drawOzzyLying(x,y);
+      return;
+    }
+
+    // legs
+    ctx.fillStyle='#0b1c11';
+    ctx.fillRect(x+6,y,6,10); // left leg
+    ctx.fillRect(x+16,y,6,10); // right leg
+
+    // shoes
+    ctx.fillStyle='#0d2616';
+    ctx.fillRect(x+6,y+10,8,3);
+    ctx.fillRect(x+16,y+10,8,3);
+
+    // body coat
+    ctx.fillStyle='#0c2013';
+    ctx.fillRect(x+2,y-22,26,22);
+
+    // arms idle
+    if(pose==='eat'){ // fork
+      ctx.fillStyle='#0d2616'; ctx.fillRect(x-2,y-16,6,4); // left arm up
+      ctx.fillStyle='#0d2616'; ctx.fillRect(x+28,y-8,4,10); // right arm down
+      // food icon
+      ctx.fillStyle='#153b21'; ctx.fillRect(x-6,y-22,6,6);
+    }else if(pose==='drink'){
+      ctx.fillStyle='#0d2616'; ctx.fillRect(x-2,y-16,6,4);
+      ctx.fillStyle='#0d2616'; ctx.fillRect(x+28,y-16,4,10);
+      // cup
+      ctx.fillStyle='#194d2a'; ctx.fillRect(x+30,y-20,6,8);
+    }else if(pose==='stage'){
+      // mic hand up
+      ctx.fillStyle='#0d2616'; ctx.fillRect(x+28,y-20,4,14);
+      ctx.fillStyle='#0a1d11'; ctx.fillRect(x+30,y-22,4,4); // mic
+    }else if(pose==='sleep' || game.temp.sleepwalk){
+      ctx.fillStyle='#0d2616'; ctx.fillRect(x-2,y-8,6,8);
+      ctx.fillStyle='#0d2616'; ctx.fillRect(x+28,y-8,4,8);
+    }else{
+      ctx.fillStyle='#0d2616'; ctx.fillRect(x-2,y-8,6,8); // left
+      ctx.fillStyle='#0d2616'; ctx.fillRect(x+28,y-8,4,8); // right
+    }
+
+    // head
+    ctx.fillStyle='#142b19'; ctx.fillRect(x+6,y-36,16,14); // hair block
+    ctx.fillStyle='#14351f'; ctx.fillRect(x+8,y-34,12,10); // face
+
+    // glasses
+    ctx.fillStyle='#102616'; ctx.fillRect(x+9,y-31,4,4); ctx.fillRect(x+15,y-31,4,4);
+
+    // mouth (varies)
+    if(pose==='stage'){ ctx.fillStyle='#0a1d11'; ctx.fillRect(x+13,y-25,3,2); }
+    else if(pose==='drink'||pose==='eat'){ ctx.fillStyle='#0a1d11'; ctx.fillRect(x+12,y-26,5,1); }
+    else if(pose==='sleep'){ ctx.fillStyle='#0a1d11'; ctx.fillRect(x+11,y-24,7,1); }
+    else{ ctx.fillStyle='#0a1d11'; ctx.fillRect(x+12,y-27,5,1); }
+
+    // necklace cross
+    ctx.fillStyle='#102415';
+    ctx.fillRect(x+18,y-20,1,8); ctx.fillRect(x+16,y-16,5,1);
+
+    // Zzz for sleep
+    if(pose==='sleep'){
+      ctx.fillStyle='#a7f3d0';
+      ctx.fillRect(x+34,y-32,2,2); ctx.fillRect(x+36,y-34,3,2);
+    }
+
+    // bat aura if many bats & low health
+    if(opts.batAura){
+      ctx.fillStyle='rgba(167,243,208,.15)';
+      ctx.fillRect(x-6,y-44,40,44);
+    }
+  }
+
+  function drawOzzyLying(x,y){
+    // body sideways
+    ctx.fillStyle='#0c2013'; ctx.fillRect(x,y-8,28,12);
+    // head
+    ctx.fillStyle='#142b19'; ctx.fillRect(x-10,y-12,12,10);
+    ctx.fillStyle='#14351f'; ctx.fillRect(x-8,y-10,8,6);
+    // X eyes
+    ctx.fillStyle='#0a1d11'; ctx.fillRect(x-7,y-9,2,2); ctx.fillRect(x-4,y-9,2,2);
+  }
+
+  // --- Controls ---
+  document.getElementById('btn-feed').onclick = ()=>{
+    const choices = ['pizza','burger','meat','dove','bat'];
+    const k = prompt('Feed what? pizza/burger/meat/dove/bat','pizza');
+    if(!k) return; if(!choices.includes(k)) return alert('Unknown food.');
+    feed(k);
+  };
+  document.getElementById('btn-drink').onclick = ()=>{
+    const choices = ['tea','coffee','alcohol'];
+    const k = prompt('Drink what? tea/coffee/alcohol','tea');
+    if(!k) return; if(!choices.includes(k)) return alert('Unknown drink.');
+    drink(k);
+  };
+  document.getElementById('btn-sleep').onclick = sleep;
+  document.getElementById('btn-stage').onclick = stage;
+  document.getElementById('btn-clean').onclick = clean;
+  document.getElementById('btn-sharon').onclick = sharon;
+  document.getElementById('btn-ach').onclick = showAchievements;
+  document.getElementById('btn-save').onclick = save;
+  document.getElementById('btn-reset').onclick = ()=>{ if(confirm('Reset progress?')){ localStorage.removeItem(SAVE_KEY); location.reload(); } };
+
+  document.querySelectorAll('.miniBtn[data-feed]').forEach(btn=>{
+    btn.onclick = ()=> feed(btn.getAttribute('data-feed'));
+  });
+  document.querySelectorAll('.miniBtn[data-drink]').forEach(btn=>{
+    btn.onclick = ()=> drink(btn.getAttribute('data-drink'));
+  });
+
+  function toast(text){
+    let el = document.querySelector('.toast');
+    if(!el){ el = document.createElement('div'); el.className='toast'; document.body.appendChild(el); }
+    el.textContent = text; el.style.display='block';
+    setTimeout(()=>{ el.style.display='none'; }, 2200);
+  }
+
+  // --- Boot ---
+  load();
+  setInterval(tick, TICK_MS);
+  render();
+
+  </script>
+</body>
+</html>
